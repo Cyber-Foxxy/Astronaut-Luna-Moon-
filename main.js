@@ -17,7 +17,7 @@ class MainScene extends Phaser.Scene {
 
   preload() {
     this.load.image("bg", "background(1).jpg");
-    this.load.image("player", "astronaut2.avif");
+    this.load.image("player", "astronaut2.png");
     this.load.image("alienRunner", "alien2.jpg");
     this.load.image("alienFlyer", "alien3.webp");
     this.load.image("platform", "platform.png");
