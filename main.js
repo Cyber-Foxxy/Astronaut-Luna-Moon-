@@ -1,3 +1,16 @@
+/*
+Features included:
+1. Spacebar jump
+2. New astronaut player image
+3. Two alien enemies to avoid
+4. Random falling stars/hazards
+5. Rearranged visible platforms
+6. Background border
+7. Spikes hazard
+8. Score system
+9. Level progression
+10. Restart on game over
+*/
 
 class MainScene extends Phaser.Scene {
   constructor() {
@@ -8,385 +21,290 @@ class MainScene extends Phaser.Scene {
   }
 
   init(data) {
-    if (data.level) this.level = data.level;
-    if (typeof data.score === "number") this.score = data.score;
+    this.level = data.level || 1;
+    this.score = data.score || 0;
+    this.gameOverFlag = false;
   }
 
-  preload() {}
+  preload() {
+    this.load.image("bg", "background(1).jpg");
+    this.load.image("player", "astronaut2.avif");
+    this.load.image("alienRunner", "alien2.jpg");
+    this.load.image("alienFlyer", "alien3.webp");
+    this.load.image("platform", "platform.png");
+    this.load.image("spikes", "spikes.png");
+    this.load.image("starCollect", "star1.png");
+    this.load.image("starHazard", "star2.webp");
+  }
 
   create() {
     const { width, height } = this.scale;
 
-    this.gameOverFlag = false;
+    this.physics.world.setBounds(0, 0, width, height);
 
-    this.createTextures();
-    this.drawBackground();
+    this.createBackground();
+    this.createBorder();
 
-    // Platforms
     this.platforms = this.physics.add.staticGroup();
-
-    // Floor raised so bottom is visible
-    this.platforms.create(width / 2, height - 30, "platformWide");
-
-    // Rearranged platforms
-    this.platforms.create(140, 500, "platform");
-    this.platforms.create(320, 420, "platform");
-    this.platforms.create(520, 340, "platform");
-    this.platforms.create(700, 460, "platform");
-    this.platforms.create(640, 230, "platform");
-    this.platforms.create(220, 260, "platform");
-
-    // Player
-    this.player = this.physics.add.sprite(100, 520, "astronaut");
-    this.player.setCollideWorldBounds(true);
-    this.player.setBounce(0.05);
-    this.player.body.setSize(40, 58);
-    this.player.body.setOffset(12, 8);
-
-    // Alien enemy
-    this.alien = this.physics.add.sprite(600, 180, "alien");
-    this.alien.setCollideWorldBounds(true);
-    this.alien.setBounce(1, 0);
-    this.alien.setVelocityX(120 + this.level * 20);
-
-    // Falling hazards group
-    this.fallingObjects = this.physics.add.group();
-
-    // Random amount of falling objects
-    const fallCount = Phaser.Math.Between(6 + this.level, 10 + this.level * 2);
-    for (let i = 0; i < fallCount; i++) {
-      this.spawnFallingObject(true);
-    }
-
-    // Collectibles
+    this.spikeGroup = this.physics.add.staticGroup();
     this.collectibles = this.physics.add.group();
+    this.fallingHazards = this.physics.add.group();
+    this.enemies = this.physics.add.group();
 
-    // Random stars and planets to collect
-    for (let i = 0; i < 6; i++) {
-      const type = Math.random() < 0.65 ? "starCollect" : "planetCollect";
-      const item = this.collectibles.create(
-        Phaser.Math.Between(80, 720),
-        Phaser.Math.Between(40, 180),
-        type
-      );
-      item.setBounce(0.4);
-      item.body.setGravityY(120);
-      item.value = type === "starCollect" ? 10 : 25;
-    }
+    this.buildPlatforms();
+    this.buildSpikes();
+    this.createPlayer();
+    this.createEnemies();
+    this.createCollectibles();
+    this.startHazards();
 
-    // UI
-    this.scoreText = this.add.text(18, 14, `Score: ${this.score}`, {
-      fontSize: "22px",
-      color: "#ffffff"
-    }).setDepth(10);
+    this.createUI();
 
-    this.levelText = this.add.text(18, 42, `Level: ${this.level}`, {
-      fontSize: "22px",
-      color: "#ffffff"
-    }).setDepth(10);
-
-    this.infoText = this.add.text(width / 2, 16, "SPACE = Jump | Avoid alien + falling objects", {
-      fontSize: "18px",
-      color: "#ffe680"
-    }).setOrigin(0.5, 0).setDepth(10);
-
-    this.messageText = this.add.text(width / 2, height / 2, "", {
-      fontSize: "36px",
-      color: "#ffccff",
-      stroke: "#000000",
-      strokeThickness: 5,
-      align: "center"
-    }).setOrigin(0.5).setDepth(10);
-
-    // Input
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE
+    );
 
-    // Collisions
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.collider(this.alien, this.platforms);
     this.physics.add.collider(this.collectibles, this.platforms);
-    this.physics.add.collider(this.fallingObjects, this.platforms, this.hitGround, null, this);
+    this.physics.add.collider(this.enemies, this.platforms);
+    this.physics.add.collider(
+      this.fallingHazards,
+      this.platforms,
+      this.onHazardHitPlatform,
+      null,
+      this
+    );
 
-    this.physics.add.overlap(this.player, this.collectibles, this.collectItem, null, this);
-    this.physics.add.overlap(this.player, this.fallingObjects, this.hitHazard, null, this);
-    this.physics.add.overlap(this.player, this.alien, this.hitHazard, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.collectibles,
+      this.collectItem,
+      null,
+      this
+    );
 
-    // Timer event to keep dropping hazards
-    this.spawnTimer = this.time.addEvent({
-      delay: Phaser.Math.Between(900, 1500),
-      callback: () => {
-        if (!this.gameOverFlag) {
-          this.spawnFallingObject(false);
-          this.spawnTimer.delay = Phaser.Math.Between(700, 1400);
-        }
-      },
-      callbackScope: this,
-      loop: true
+    this.physics.add.overlap(
+      this.player,
+      this.spikeGroup,
+      this.hitDanger,
+      null,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.enemies,
+      this.hitDanger,
+      null,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.fallingHazards,
+      this.hitDanger,
+      null,
+      this
+    );
+  }
+
+  createBackground() {
+    const { width, height } = this.scale;
+
+    this.bg = this.add.image(width / 2, height / 2, "bg");
+    this.bg.setDisplaySize(width, height);
+
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x1b1038, 0.18);
+    overlay.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 35; i++) {
+      const x = Phaser.Math.Between(20, width - 20);
+      const y = Phaser.Math.Between(20, height - 20);
+      const size = Phaser.Math.Between(1, 3);
+      overlay.fillStyle(0xffffff, Phaser.Math.FloatBetween(0.3, 0.8));
+      overlay.fillCircle(x, y, size);
+    }
+  }
+
+  createBorder() {
+    const { width, height } = this.scale;
+    const border = this.add.graphics();
+
+    border.lineStyle(4, 0xffffff, 0.35);
+    border.strokeRect(4, 4, width - 8, height - 8);
+
+    border.lineStyle(8, 0x8b5cf6, 0.85);
+    border.strokeRect(10, 10, width - 20, height - 20);
+  }
+
+  buildPlatforms() {
+    const platformData = [
+      { x: 400, y: 575, scaleX: 0.42, scaleY: 0.22 }, // ground higher so bottom is visible
+      { x: 160, y: 485, scaleX: 0.16, scaleY: 0.14 },
+      { x: 355, y: 410, scaleX: 0.16, scaleY: 0.14 },
+      { x: 585, y: 330, scaleX: 0.16, scaleY: 0.14 },
+      { x: 705, y: 470, scaleX: 0.14, scaleY: 0.14 },
+      { x: 235, y: 255, scaleX: 0.14, scaleY: 0.14 },
+      { x: 675, y: 205, scaleX: 0.14, scaleY: 0.14 }
+    ];
+
+    platformData.forEach((p) => {
+      const plat = this.platforms.create(p.x, p.y, "platform");
+      plat.setScale(p.scaleX, p.scaleY);
+      plat.refreshBody();
     });
   }
 
-  createTextures() {
-    if (!this.textures.exists("astronaut")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
+  buildSpikes() {
+    const spikeData = [
+      { x: 520, y: 545 },
+      { x: 610, y: 545 },
+      { x: 95, y: 545 }
+    ];
 
-      // astronaut body
-      g.clear();
-      g.fillStyle(0xffffff, 1);
-      g.fillRoundedRect(16, 18, 32, 44, 12);
-
-      // helmet
-      g.fillStyle(0xf8f8ff, 1);
-      g.fillCircle(32, 18, 18);
-
-      // visor
-      g.fillStyle(0x33b5ff, 1);
-      g.fillEllipse(32, 18, 24, 18);
-
-      // arms
-      g.fillStyle(0xffffff, 1);
-      g.fillRoundedRect(6, 26, 12, 26, 8);
-      g.fillRoundedRect(46, 26, 12, 26, 8);
-
-      // legs
-      g.fillRoundedRect(18, 54, 10, 18, 6);
-      g.fillRoundedRect(36, 54, 10, 18, 6);
-
-      // pink accents
-      g.fillStyle(0xff4fb3, 1);
-      g.fillCircle(32, 38, 4);
-      g.fillRect(8, 34, 8, 4);
-      g.fillRect(48, 34, 8, 4);
-      g.fillRect(19, 62, 8, 4);
-      g.fillRect(37, 62, 8, 4);
-
-      g.generateTexture("astronaut", 64, 80);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("alien")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-
-      g.clear();
-
-      // head
-      g.fillStyle(0x8cff4a, 1);
-      g.fillEllipse(32, 22, 34, 38);
-
-      // body
-      g.fillStyle(0x79e03e, 1);
-      g.fillRoundedRect(20, 38, 24, 26, 10);
-
-      // eyes
-      g.fillStyle(0x111111, 1);
-      g.fillEllipse(24, 20, 8, 13);
-      g.fillEllipse(40, 20, 8, 13);
-
-      // shine
-      g.fillStyle(0xffffff, 0.8);
-      g.fillCircle(22, 16, 2);
-      g.fillCircle(38, 16, 2);
-
-      // antennae
-      g.lineStyle(2, 0x8cff4a, 1);
-      g.beginPath();
-      g.moveTo(24, 5);
-      g.lineTo(20, -4);
-      g.moveTo(40, 5);
-      g.lineTo(44, -4);
-      g.strokePath();
-
-      g.fillStyle(0xb8ff88, 1);
-      g.fillCircle(20, 0, 3);
-      g.fillCircle(44, 0, 3);
-
-      // arms
-      g.fillStyle(0x79e03e, 1);
-      g.fillRoundedRect(10, 40, 10, 20, 6);
-      g.fillRoundedRect(44, 40, 10, 20, 6);
-
-      // legs
-      g.fillRoundedRect(22, 60, 8, 14, 5);
-      g.fillRoundedRect(34, 60, 8, 14, 5);
-
-      g.generateTexture("alien", 64, 80);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("starCollect")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-      g.fillStyle(0xffea00, 1);
-
-      const pts = [
-        20, 0,
-        25, 14,
-        40, 14,
-        28, 24,
-        33, 40,
-        20, 30,
-        7, 40,
-        12, 24,
-        0, 14,
-        15, 14
-      ];
-
-      g.beginPath();
-      g.moveTo(pts[0], pts[1]);
-      for (let i = 2; i < pts.length; i += 2) {
-        g.lineTo(pts[i], pts[i + 1]);
-      }
-      g.closePath();
-      g.fillPath();
-
-      g.lineStyle(2, 0xffc400, 1);
-      g.strokePath();
-
-      g.generateTexture("starCollect", 40, 40);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("planetCollect")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-
-      g.fillStyle(0xffa234, 1);
-      g.fillCircle(28, 28, 16);
-
-      g.lineStyle(4, 0xcfd8dc, 1);
-      g.beginPath();
-      g.ellipse(28, 28, 26, 10, -0.2, 0, Math.PI * 2);
-      g.strokePath();
-
-      g.generateTexture("planetCollect", 56, 56);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("starHazard")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-      g.fillStyle(0xff4d6d, 1);
-
-      const pts = [
-        18, 0,
-        23, 11,
-        36, 12,
-        26, 20,
-        30, 34,
-        18, 26,
-        6, 34,
-        10, 20,
-        0, 12,
-        13, 11
-      ];
-
-      g.beginPath();
-      g.moveTo(pts[0], pts[1]);
-      for (let i = 2; i < pts.length; i += 2) {
-        g.lineTo(pts[i], pts[i + 1]);
-      }
-      g.closePath();
-      g.fillPath();
-
-      g.generateTexture("starHazard", 36, 36);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("planetHazard")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-
-      g.fillStyle(0x7c5cff, 1);
-      g.fillCircle(22, 22, 14);
-
-      g.lineStyle(3, 0xffffff, 1);
-      g.beginPath();
-      g.ellipse(22, 22, 24, 8, 0.4, 0, Math.PI * 2);
-      g.strokePath();
-
-      g.generateTexture("planetHazard", 44, 44);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("platform")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-      g.fillStyle(0x8a6cff, 1);
-      g.fillRoundedRect(0, 0, 120, 20, 8);
-      g.lineStyle(3, 0xd9c8ff, 1);
-      g.strokeRoundedRect(0, 0, 120, 20, 8);
-      g.generateTexture("platform", 120, 20);
-      g.destroy();
-    }
-
-    if (!this.textures.exists("platformWide")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-      g.fillStyle(0x8a6cff, 1);
-      g.fillRoundedRect(0, 0, 820, 24, 10);
-      g.lineStyle(4, 0xd9c8ff, 1);
-      g.strokeRoundedRect(0, 0, 820, 24, 10);
-      g.generateTexture("platformWide", 820, 24);
-      g.destroy();
-    }
+    spikeData.forEach((s) => {
+      const spike = this.spikeGroup.create(s.x, s.y, "spikes");
+      spike.setScale(0.18);
+      spike.refreshBody();
+    });
   }
 
-  drawBackground() {
-    const { width, height } = this.scale;
+  createPlayer() {
+    this.player = this.physics.add.sprite(90, 500, "player");
+    this.player.setScale(0.14);
+    this.player.setCollideWorldBounds(true);
+    this.player.setBounce(0.05);
 
-    const bg = this.add.graphics();
-
-    bg.fillGradientStyle(0x09091a, 0x12123a, 0x1a1240, 0x09091a, 1);
-    bg.fillRect(0, 0, width, height);
-
-    for (let i = 0; i < 80; i++) {
-      const x = Phaser.Math.Between(10, width - 10);
-      const y = Phaser.Math.Between(10, height - 10);
-      const r = Phaser.Math.Between(1, 2);
-      bg.fillStyle(0xffffff, Phaser.Math.FloatBetween(0.4, 1));
-      bg.fillCircle(x, y, r);
-    }
-
-    // glowing purple nebula blobs
-    for (let i = 0; i < 8; i++) {
-      bg.fillStyle(0x8b3dff, 0.12);
-      bg.fillCircle(
-        Phaser.Math.Between(80, width - 80),
-        Phaser.Math.Between(80, height - 80),
-        Phaser.Math.Between(50, 110)
-      );
-    }
-
-    // inner edge/border
-    bg.lineStyle(4, 0xffffff, 0.3);
-    bg.strokeRect(4, 4, width - 8, height - 8);
-
-    bg.lineStyle(8, 0x8a6cff, 0.7);
-    bg.strokeRect(10, 10, width - 20, height - 20);
+    this.player.body.setSize(
+      this.player.width * 0.38,
+      this.player.height * 0.78
+    );
+    this.player.body.setOffset(
+      this.player.width * 0.31,
+      this.player.height * 0.12
+    );
   }
 
-  spawnFallingObject(initialSpawn = false) {
+  createEnemies() {
+    const runner = this.physics.add.sprite(610, 120, "alienRunner");
+    runner.setScale(0.18);
+    runner.setCollideWorldBounds(true);
+    runner.setBounce(1, 0);
+    runner.setVelocityX(130 + this.level * 15);
+    runner.enemyType = "runner";
+
+    runner.body.setSize(runner.width * 0.55, runner.height * 0.65);
+    runner.body.setOffset(runner.width * 0.2, runner.height * 0.2);
+
+    const flyer = this.physics.add.sprite(250, 150, "alienFlyer");
+    flyer.setScale(0.22);
+    flyer.setCollideWorldBounds(true);
+    flyer.setAllowGravity(false);
+    flyer.setVelocityX(100 + this.level * 15);
+    flyer.enemyType = "flyer";
+    flyer.startY = flyer.y;
+
+    flyer.body.setSize(flyer.width * 0.5, flyer.height * 0.7);
+    flyer.body.setOffset(flyer.width * 0.22, flyer.height * 0.15);
+
+    this.enemies.add(runner);
+    this.enemies.add(flyer);
+
+    this.runner = runner;
+    this.flyer = flyer;
+  }
+
+  createCollectibles() {
+    const collectibleData = [
+      { x: 140, y: 430, value: 10 },
+      { x: 350, y: 355, value: 10 },
+      { x: 570, y: 275, value: 10 },
+      { x: 705, y: 415, value: 15 },
+      { x: 230, y: 195, value: 15 },
+      { x: 675, y: 145, value: 20 }
+    ];
+
+    collectibleData.forEach((c) => {
+      const star = this.collectibles.create(c.x, c.y, "starCollect");
+      star.setScale(0.08);
+      star.setBounce(0.25);
+      star.value = c.value;
+      star.body.setGravityY(80);
+    });
+  }
+
+  startHazards() {
+    const startAmount = Phaser.Math.Between(5 + this.level, 8 + this.level);
+
+    for (let i = 0; i < startAmount; i++) {
+      this.spawnHazard(true);
+    }
+
+    this.hazardTimer = this.time.addEvent({
+      delay: Phaser.Math.Between(900, 1400),
+      loop: true,
+      callback: () => {
+        if (!this.gameOverFlag) {
+          this.spawnHazard(false);
+          this.hazardTimer.delay = Phaser.Math.Between(800, 1300);
+        }
+      }
+    });
+  }
+
+  spawnHazard(initial = false) {
     const { width } = this.scale;
-    const type = Math.random() < 0.55 ? "starHazard" : "planetHazard";
 
-    const obj = this.fallingObjects.create(
+    const hazard = this.fallingHazards.create(
       Phaser.Math.Between(40, width - 40),
-      initialSpawn ? Phaser.Math.Between(-400, -40) : -40,
-      type
+      initial ? Phaser.Math.Between(-500, -40) : -50,
+      "starHazard"
     );
 
-    obj.setBounce(0.2);
-    obj.setCollideWorldBounds(false);
-    obj.body.setGravityY(Phaser.Math.Between(180, 320) + this.level * 25);
-    obj.setVelocityX(Phaser.Math.Between(-40, 40));
+    const randomScale = Phaser.Math.FloatBetween(0.05, 0.09);
+    hazard.setScale(randomScale);
+    hazard.setBounce(0.15);
+    hazard.setVelocityX(Phaser.Math.Between(-40, 40));
+    hazard.setAngularVelocity(Phaser.Math.Between(-120, 120));
+    hazard.body.setGravityY(Phaser.Math.Between(220, 340) + this.level * 30);
+  }
 
-    if (type === "starHazard") {
-      obj.damage = 1;
-      obj.setAngularVelocity(Phaser.Math.Between(-180, 180));
-    } else {
-      obj.damage = 1;
-      obj.setAngularVelocity(Phaser.Math.Between(-120, 120));
-    }
+  createUI() {
+    this.scoreText = this.add.text(18, 15, `Score: ${this.score}`, {
+      fontSize: "22px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 4
+    }).setDepth(20);
+
+    this.levelText = this.add.text(18, 45, `Level: ${this.level}`, {
+      fontSize: "22px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 4
+    }).setDepth(20);
+
+    this.infoText = this.add.text(
+      400,
+      16,
+      "LEFT/RIGHT to move   |   SPACE to jump",
+      {
+        fontSize: "18px",
+        color: "#ffe680",
+        stroke: "#000000",
+        strokeThickness: 4
+      }
+    ).setOrigin(0.5, 0).setDepth(20);
+
+    this.messageText = this.add.text(400, 300, "", {
+      fontSize: "34px",
+      align: "center",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 6
+    }).setOrigin(0.5).setDepth(30);
   }
 
   collectItem(player, item) {
@@ -395,36 +313,34 @@ class MainScene extends Phaser.Scene {
     item.destroy();
 
     if (this.collectibles.countActive(true) === 0) {
-      this.nextLevel();
+      this.levelComplete();
     }
   }
 
-  hitGround(object, platform) {
-    if (object.y > 560) {
-      object.destroy();
+  onHazardHitPlatform(hazard) {
+    if (hazard.y > 540) {
+      hazard.destroy();
     }
   }
 
-  hitHazard() {
+  hitDanger() {
     if (this.gameOverFlag) return;
 
     this.gameOverFlag = true;
     this.physics.pause();
-    this.player.setTint(0xff4d6d);
+    this.player.setTint(0xff6666);
     this.messageText.setText("Game Over\nClick to Restart");
 
     this.input.once("pointerdown", () => {
       this.scene.restart({ level: 1, score: 0 });
-      this.level = 1;
-      this.score = 0;
     });
   }
 
-  nextLevel() {
+  levelComplete() {
     this.physics.pause();
     this.messageText.setText(`Level ${this.level} Complete!`);
 
-    this.time.delayedCall(1200, () => {
+    this.time.delayedCall(1300, () => {
       this.scene.restart({
         level: this.level + 1,
         score: this.score
@@ -432,21 +348,21 @@ class MainScene extends Phaser.Scene {
     });
   }
 
-  update() {
+  update(time) {
     if (this.gameOverFlag) return;
 
-    const speed = 220;
+    const moveSpeed = 230;
 
-    // player movement
     if (this.cursors.left.isDown) {
-      this.player.setVelocityX(-speed);
+      this.player.setVelocityX(-moveSpeed);
+      this.player.flipX = true;
     } else if (this.cursors.right.isDown) {
-      this.player.setVelocityX(speed);
+      this.player.setVelocityX(moveSpeed);
+      this.player.flipX = false;
     } else {
       this.player.setVelocityX(0);
     }
 
-    // jump with space only
     if (
       Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
       this.player.body.blocked.down
@@ -454,17 +370,29 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityY(-390);
     }
 
-    // alien movement
-    if (this.alien.body.blocked.left) {
-      this.alien.setVelocityX(120 + this.level * 20);
-    } else if (this.alien.body.blocked.right) {
-      this.alien.setVelocityX(-(120 + this.level * 20));
+    if (this.runner) {
+      if (this.runner.body.blocked.left) {
+        this.runner.setVelocityX(130 + this.level * 15);
+      } else if (this.runner.body.blocked.right) {
+        this.runner.setVelocityX(-(130 + this.level * 15));
+      }
     }
 
-    // clean up falling objects offscreen
-    this.fallingObjects.children.each((obj) => {
-      if (obj && obj.active && obj.y > 650) {
-        obj.destroy();
+    if (this.flyer) {
+      if (this.flyer.x <= 70) {
+        this.flyer.setVelocityX(100 + this.level * 15);
+        this.flyer.flipX = false;
+      } else if (this.flyer.x >= 730) {
+        this.flyer.setVelocityX(-(100 + this.level * 15));
+        this.flyer.flipX = true;
+      }
+
+      this.flyer.y = this.flyer.startY + Math.sin(time / 350) * 25;
+    }
+
+    this.fallingHazards.children.each((hazard) => {
+      if (hazard && hazard.active && hazard.y > 660) {
+        hazard.destroy();
       }
     });
   }
@@ -478,7 +406,7 @@ const config = {
   physics: {
     default: "arcade",
     arcade: {
-      gravity: { y: 500 },
+      gravity: { y: 520 },
       debug: false
     }
   },
