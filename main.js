@@ -13,7 +13,6 @@ class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    // This tells Phaser all assets are inside the assets folder
     this.load.setPath("assets/");
 
     this.load.on("loaderror", (file) => {
@@ -21,45 +20,42 @@ class MainScene extends Phaser.Scene {
     });
 
     this.load.on("complete", () => {
-      console.log("All assets finished loading.");
+      console.log("Assets finished loading.");
     });
 
-    this.load.image("bg", "background.jpg");
-    this.load.image("player", "astronaut2.png");
-    this.load.image("alienRunner", "alien2.jpg");
-    this.load.image("alienFlyer", "alien3.webp");
+    this.load.image("bg", "background.png");
+    this.load.image("player", "astronaut.png");
+    this.load.image("alienRunner", "alien1.png");
+    this.load.image("alienFlyer", "alien2.png");
     this.load.image("platform", "platform.png");
     this.load.image("spike", "spikes.png");
     this.load.image("starCollect", "star1.png");
-    this.load.image("starHazard", "star2.webp");
+    this.load.image("starHazard", "star2.png");
   }
 
   create() {
     const { width, height } = this.scale;
 
+    this.cameras.main.setBackgroundColor("#1d1240");
     this.physics.world.setBounds(0, 0, width, height);
-    this.cameras.main.setBackgroundColor("#120b2f");
 
+    // Background
     this.bg = this.add.image(width / 2, height / 2, "bg");
     this.bg.setDisplaySize(width, height);
+    this.bg.setDepth(0);
 
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x120b2f,
-      0.18
-    );
-    overlay.setDepth(1);
+    // Dark overlay for readability
+    this.add.rectangle(width / 2, height / 2, width, height, 0x120b2f, 0.18).setDepth(1);
 
+    // Border
     const border = this.add.graphics();
-    border.lineStyle(4, 0xffffff, 0.3);
+    border.lineStyle(4, 0xffffff, 0.25);
     border.strokeRect(4, 4, width - 8, height - 8);
     border.lineStyle(8, 0x8b5cf6, 0.8);
     border.strokeRect(12, 12, width - 24, height - 24);
-    border.setDepth(20);
+    border.setDepth(50);
 
+    // Groups
     this.platforms = this.physics.add.staticGroup();
     this.spikes = this.physics.add.staticGroup();
     this.collectibles = this.physics.add.group();
@@ -74,29 +70,17 @@ class MainScene extends Phaser.Scene {
     this.startHazardSpawner();
     this.createUI();
 
+    // Input
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.spaceKey = this.input.keyboard.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE
-    );
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
+    // Physics
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.collectibles, this.platforms);
-    this.physics.add.collider(
-      this.hazards,
-      this.platforms,
-      this.handleHazardPlatformHit,
-      null,
-      this
-    );
+    this.physics.add.collider(this.hazards, this.platforms, this.handleHazardPlatformHit, null, this);
 
-    this.physics.add.overlap(
-      this.player,
-      this.collectibles,
-      this.collectItem,
-      null,
-      this
-    );
+    this.physics.add.overlap(this.player, this.collectibles, this.collectItem, null, this);
     this.physics.add.overlap(this.player, this.spikes, this.hitDanger, null, this);
     this.physics.add.overlap(this.player, this.enemies, this.hitDanger, null, this);
     this.physics.add.overlap(this.player, this.hazards, this.hitDanger, null, this);
@@ -104,13 +88,13 @@ class MainScene extends Phaser.Scene {
 
   buildPlatforms() {
     const platformData = [
-      { x: 400, y: 570, scaleX: 0.42, scaleY: 0.22 },
-      { x: 170, y: 485, scaleX: 0.16, scaleY: 0.14 },
-      { x: 360, y: 410, scaleX: 0.16, scaleY: 0.14 },
-      { x: 575, y: 335, scaleX: 0.16, scaleY: 0.14 },
-      { x: 710, y: 460, scaleX: 0.14, scaleY: 0.14 },
-      { x: 230, y: 255, scaleX: 0.14, scaleY: 0.14 },
-      { x: 655, y: 205, scaleX: 0.14, scaleY: 0.14 }
+      { x: 400, y: 575, scaleX: 0.28, scaleY: 0.18 },
+      { x: 160, y: 485, scaleX: 0.12, scaleY: 0.12 },
+      { x: 340, y: 410, scaleX: 0.12, scaleY: 0.12 },
+      { x: 560, y: 330, scaleX: 0.12, scaleY: 0.12 },
+      { x: 700, y: 455, scaleX: 0.11, scaleY: 0.11 },
+      { x: 235, y: 255, scaleX: 0.11, scaleY: 0.11 },
+      { x: 640, y: 205, scaleX: 0.11, scaleY: 0.11 }
     ];
 
     platformData.forEach((p) => {
@@ -122,95 +106,102 @@ class MainScene extends Phaser.Scene {
 
   buildSpikes() {
     const spikeData = [
-      { x: 525, y: 545 },
-      { x: 615, y: 545 },
-      { x: 100, y: 545 }
+      { x: 520, y: 543 },
+      { x: 610, y: 543 },
+      { x: 95, y: 543 }
     ];
 
     spikeData.forEach((s) => {
       const spike = this.spikes.create(s.x, s.y, "spike");
-      spike.setScale(0.16);
+      spike.setScale(0.12);
       spike.refreshBody();
     });
   }
 
   createPlayer() {
-    this.player = this.physics.add.sprite(100, 470, "player");
-    this.player.setScale(0.12);
+    this.player = this.physics.add.sprite(90, 500, "player");
+    this.player.setScale(0.13);
     this.player.setCollideWorldBounds(true);
     this.player.setBounce(0.03);
 
+    // simpler body box
     this.player.body.setSize(
-      this.player.width * 0.35,
-      this.player.height * 0.72
+      this.player.width * 0.45,
+      this.player.height * 0.70
     );
     this.player.body.setOffset(
-      this.player.width * 0.33,
-      this.player.height * 0.14
+      this.player.width * 0.28,
+      this.player.height * 0.18
     );
   }
 
   createEnemies() {
-    this.runner = this.physics.add.sprite(580, 110, "alienRunner");
-    this.runner.setScale(0.16);
+    // Ground enemy
+    this.runner = this.physics.add.sprite(590, 120, "alienRunner");
+    this.runner.setScale(0.13);
     this.runner.setCollideWorldBounds(true);
     this.runner.setBounce(1, 0);
-    this.runner.setVelocityX(120 + this.level * 10);
+    this.runner.setVelocityX(110 + this.level * 10);
+
     this.runner.body.setSize(
       this.runner.width * 0.55,
-      this.runner.height * 0.55
+      this.runner.height * 0.50
     );
     this.runner.body.setOffset(
-      this.runner.width * 0.18,
-      this.runner.height * 0.22
+      this.runner.width * 0.20,
+      this.runner.height * 0.28
     );
+
     this.enemies.add(this.runner);
 
-    this.flyer = this.physics.add.sprite(240, 140, "alienFlyer");
-    this.flyer.setScale(0.22);
-    this.flyer.setCollideWorldBounds(true);
+    // Flying enemy
+    this.flyer = this.physics.add.sprite(250, 150, "alienFlyer");
+    this.flyer.setScale(0.14);
     this.flyer.setAllowGravity(false);
-    this.flyer.setVelocityX(100 + this.level * 10);
+    this.flyer.setCollideWorldBounds(true);
+    this.flyer.setVelocityX(90 + this.level * 10);
     this.flyer.startY = this.flyer.y;
+
     this.flyer.body.setSize(
-      this.flyer.width * 0.42,
-      this.flyer.height * 0.6
+      this.flyer.width * 0.45,
+      this.flyer.height * 0.70
     );
     this.flyer.body.setOffset(
       this.flyer.width * 0.28,
       this.flyer.height * 0.14
     );
+
     this.enemies.add(this.flyer);
   }
 
   createCollectibles() {
-    const starData = [
-      { x: 150, y: 425, value: 10 },
-      { x: 350, y: 350, value: 10 },
-      { x: 565, y: 275, value: 10 },
-      { x: 700, y: 405, value: 15 },
-      { x: 225, y: 190, value: 15 },
-      { x: 655, y: 140, value: 20 }
+    const items = [
+      { x: 150, y: 430, value: 10 },
+      { x: 340, y: 355, value: 10 },
+      { x: 560, y: 275, value: 10 },
+      { x: 700, y: 410, value: 15 },
+      { x: 235, y: 195, value: 15 },
+      { x: 640, y: 145, value: 20 }
     ];
 
-    starData.forEach((item) => {
+    items.forEach((item) => {
       const star = this.collectibles.create(item.x, item.y, "starCollect");
       star.setScale(0.08);
       star.setBounce(0.2);
-      star.body.setGravityY(70);
+      star.body.setGravityY(60);
       star.value = item.value;
     });
   }
 
   startHazardSpawner() {
-    const startingHazards = Phaser.Math.Between(4 + this.level, 7 + this.level);
+    const startingHazards = Phaser.Math.Between(4, 6);
 
     for (let i = 0; i < startingHazards; i++) {
       this.spawnHazard(true);
     }
 
     this.hazardTimer = this.time.addEvent({
-      delay: 1100,
+      delay: 1200,
       loop: true,
       callback: () => {
         if (!this.gameOverFlag) {
@@ -224,16 +215,16 @@ class MainScene extends Phaser.Scene {
     const { width } = this.scale;
 
     const hazard = this.hazards.create(
-      Phaser.Math.Between(40, width - 40),
-      initialSpawn ? Phaser.Math.Between(-500, -50) : -40,
+      Phaser.Math.Between(50, width - 50),
+      initialSpawn ? Phaser.Math.Between(-400, -50) : -40,
       "starHazard"
     );
 
     hazard.setScale(0.06);
-    hazard.setBounce(0.15);
-    hazard.setVelocityX(Phaser.Math.Between(-35, 35));
-    hazard.setAngularVelocity(Phaser.Math.Between(-100, 100));
-    hazard.body.setGravityY(Phaser.Math.Between(220, 320) + this.level * 25);
+    hazard.setBounce(0.1);
+    hazard.setVelocityX(Phaser.Math.Between(-30, 30));
+    hazard.setAngularVelocity(Phaser.Math.Between(-90, 90));
+    hazard.body.setGravityY(Phaser.Math.Between(220, 300) + this.level * 20);
   }
 
   createUI() {
@@ -242,14 +233,14 @@ class MainScene extends Phaser.Scene {
       fill: "#ffffff",
       stroke: "#000000",
       strokeThickness: 5
-    }).setDepth(30);
+    }).setDepth(100);
 
     this.levelText = this.add.text(18, 46, `Level: ${this.level}`, {
       fontSize: "22px",
       fill: "#ffffff",
       stroke: "#000000",
       strokeThickness: 5
-    }).setDepth(30);
+    }).setDepth(100);
 
     this.infoText = this.add.text(
       400,
@@ -261,15 +252,21 @@ class MainScene extends Phaser.Scene {
         stroke: "#000000",
         strokeThickness: 5
       }
-    ).setOrigin(0.5, 0).setDepth(30);
+    ).setOrigin(0.5, 0).setDepth(100);
 
-    this.messageText = this.add.text(400, 300, "", {
-      fontSize: "34px",
-      align: "center",
+    this.messageText = this.add.text(400, 300, "Collect all the stars!", {
+      fontSize: "28px",
       fill: "#ffffff",
       stroke: "#000000",
-      strokeThickness: 6
-    }).setOrigin(0.5).setDepth(40);
+      strokeThickness: 6,
+      align: "center"
+    }).setOrigin(0.5).setDepth(100);
+
+    this.time.delayedCall(1800, () => {
+      if (!this.gameOverFlag) {
+        this.messageText.setText("");
+      }
+    });
   }
 
   collectItem(player, item) {
@@ -316,7 +313,7 @@ class MainScene extends Phaser.Scene {
   update(time) {
     if (this.gameOverFlag) return;
 
-    const moveSpeed = 230;
+    const moveSpeed = 220;
 
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-moveSpeed);
@@ -332,27 +329,27 @@ class MainScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
       this.player.body.blocked.down
     ) {
-      this.player.setVelocityY(-390);
+      this.player.setVelocityY(-380);
     }
 
     if (this.runner) {
       if (this.runner.body.blocked.left) {
-        this.runner.setVelocityX(120 + this.level * 10);
+        this.runner.setVelocityX(110 + this.level * 10);
       } else if (this.runner.body.blocked.right) {
-        this.runner.setVelocityX(-(120 + this.level * 10));
+        this.runner.setVelocityX(-(110 + this.level * 10));
       }
     }
 
     if (this.flyer) {
       if (this.flyer.x <= 70) {
-        this.flyer.setVelocityX(100 + this.level * 10);
+        this.flyer.setVelocityX(90 + this.level * 10);
         this.flyer.flipX = false;
       } else if (this.flyer.x >= 730) {
-        this.flyer.setVelocityX(-(100 + this.level * 10));
+        this.flyer.setVelocityX(-(90 + this.level * 10));
         this.flyer.flipX = true;
       }
 
-      this.flyer.y = this.flyer.startY + Math.sin(time / 350) * 22;
+      this.flyer.y = this.flyer.startY + Math.sin(time / 350) * 18;
     }
 
     this.hazards.children.each((hazard) => {
