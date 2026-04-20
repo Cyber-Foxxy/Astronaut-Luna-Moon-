@@ -1,14 +1,3 @@
-/*
-Features included:
-1. Spacebar jump
-2. New astronaut player image
-3. Two alien enemies to avoid
-4. Random falling stars/hazards
-5. Rearranged visible platforms
-6. Background border
-7. Spikes hazard
-8. Score system
-9. Level progression
 10. Restart on game over
 */
 
