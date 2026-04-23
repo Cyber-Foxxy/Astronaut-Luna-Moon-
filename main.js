@@ -1,4 +1,3 @@
-
 class StartScene extends Phaser.Scene {
   constructor() {
     super("StartScene");
@@ -12,37 +11,37 @@ class StartScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
-    this.add.image(width / 2, height / 2, "bg").setDisplaySize(width, height);
+    const bg = this.add.image(width / 2, height / 2, "bg");
+    bg.setDisplaySize(width, height);
+
     this.add.rectangle(width / 2, height / 2, width, height, 0x120b2f, 0.4);
 
-    this.add.text(width / 2, 120, "Astronaut Luna Moon", {
-      fontSize: "44px",
+    this.add.text(width / 2, 100, "Astronaut Luna Moon", {
+      fontSize: "42px",
       color: "#ffffff",
-      stroke: "#000000",
+      stroke: "#000",
       strokeThickness: 6
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 240,
-      "Collect stars\nAvoid aliens + spikes\nSpacebar = Jump",
+    this.add.text(width / 2, 250,
+      "Arrow Keys = Move\nSpacebar = Jump\nCollect stars, avoid enemies!",
       {
-        fontSize: "26px",
+        fontSize: "24px",
         color: "#ffe680",
-        align: "center",
-        stroke: "#000000",
-        strokeThickness: 5
+        align: "center"
       }
     ).setOrigin(0.5);
 
-    const btn = this.add.rectangle(width / 2, 420, 220, 65, 0x8b5cf6)
-      .setInteractive({ useHandCursor: true });
+    const btn = this.add.rectangle(width / 2, 430, 240, 70, 0x8b5cf6)
+      .setInteractive();
 
-    this.add.text(width / 2, 420, "START", {
+    this.add.text(width / 2, 430, "START GAME", {
       fontSize: "28px",
       color: "#fff"
     }).setOrigin(0.5);
 
     btn.on("pointerdown", () => {
-      this.scene.start("MainScene", { score: 0, level: 1, lives: 3 });
+      this.scene.start("MainScene", { score: 0, lives: 3, level: 1 });
     });
   }
 }
@@ -50,26 +49,18 @@ class StartScene extends Phaser.Scene {
 class MainScene extends Phaser.Scene {
   constructor() {
     super("MainScene");
-    this.score = 0;
-    this.level = 1;
-    this.lives = 3;
-    this.timeAlive = 0;
-    this.invincible = false;
-    this.gameOverFlag = false;
   }
 
   init(data) {
-    this.score = data.score || 0;
-    this.level = data.level || 1;
-    this.lives = data.lives ?? 3;
-    this.timeAlive = 0;
-    this.invincible = false;
-    this.gameOverFlag = false;
+    this.score = data.score;
+    this.lives = data.lives;
+    this.level = data.level;
+    this.isInvincible = false;
+    this.gameOver = false;
   }
 
   preload() {
     this.load.setPath("assets/");
-
     this.load.image("bg", "background.png");
     this.load.image("player", "astronaut.png");
     this.load.image("alien1", "alien1.png");
@@ -84,11 +75,7 @@ class MainScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.add.image(width / 2, height / 2, "bg").setDisplaySize(width, height);
-    this.add.rectangle(width / 2, height / 2, width, height, 0x120b2f, 0.15);
 
-    this.physics.world.setBounds(0, 0, width, height);
-
-    // groups
     this.platforms = this.physics.add.staticGroup();
     this.spikes = this.physics.add.staticGroup();
     this.collectibles = this.physics.add.group();
@@ -96,165 +83,146 @@ class MainScene extends Phaser.Scene {
 
     this.buildPlatforms();
     this.buildSpikes();
-    this.createPlayer();
-    this.createEnemies();
+
+    // PLAYER
+    this.player = this.physics.add.sprite(100, 450, "player");
+    this.player.setScale(0.11);
+    this.player.setCollideWorldBounds(true);
+
+    // ENEMIES
+    this.runner = this.physics.add.sprite(500, 250, "alien1");
+    this.runner.setScale(0.14);
+    this.runner.setVelocityX(100);
+    this.runner.setBounce(1, 0);
+
+    this.flyer = this.physics.add.sprite(300, 150, "alien2");
+    this.flyer.setScale(0.14);
+    this.flyer.body.allowGravity = false;
+    this.flyer.startY = this.flyer.y;
+    this.flyer.setVelocityX(70);
+
     this.createCollectibles();
     this.spawnHazards();
-    this.createUI();
 
+    // UI
+    this.scoreText = this.add.text(10, 10, "Score: " + this.score);
+    this.livesText = this.add.text(10, 40, "Lives: " + this.lives);
+
+    // INPUT
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE
+    );
 
-    // collisions
+    // COLLISIONS
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.runner, this.platforms);
     this.physics.add.collider(this.collectibles, this.platforms);
-    this.physics.add.collider(this.hazards, this.platforms);
 
-    this.physics.add.overlap(this.player, this.collectibles, this.collect, null, this);
-    this.physics.add.overlap(this.player, this.runner, this.hit, null, this);
-    this.physics.add.overlap(this.player, this.flyer, this.hit, null, this);
-    this.physics.add.overlap(this.player, this.spikes, this.hit, null, this);
-    this.physics.add.overlap(this.player, this.hazards, this.hit, null, this);
+    this.physics.add.overlap(this.player, this.collectibles, this.collectStar, null, this);
+    this.physics.add.overlap(this.player, this.runner, this.hitPlayer, null, this);
+    this.physics.add.overlap(this.player, this.flyer, this.hitPlayer, null, this);
+    this.physics.add.overlap(this.player, this.spikes, this.hitPlayer, null, this);
+    this.physics.add.overlap(this.player, this.hazards, this.hitPlayer, null, this);
   }
 
-  // ---------------- PLATFORMS ----------------
   buildPlatforms() {
     const data = [
-      { x: 400, y: 510, sx: 1.1, sy: 0.6 },
-      { x: 170, y: 430, sx: 0.5, sy: 0.42 },
-      { x: 330, y: 360, sx: 0.5, sy: 0.42 },
-      { x: 500, y: 295, sx: 0.5, sy: 0.42 },
-      { x: 670, y: 230, sx: 0.5, sy: 0.42 },
-      { x: 230, y: 240, sx: 0.42, sy: 0.36 },
-      { x: 690, y: 380, sx: 0.42, sy: 0.36 }
+      { x: 400, y: 520, s: 1.1 },
+      { x: 170, y: 440 },
+      { x: 330, y: 370 },
+      { x: 500, y: 300 },
+      { x: 670, y: 240 }
     ];
 
     data.forEach(p => {
       const plat = this.platforms.create(p.x, p.y, "platform");
-      plat.setScale(p.sx, p.sy);
+      plat.setScale(p.s || 0.5);
       plat.refreshBody();
     });
   }
 
-  // ---------------- SPIKES (even + small) ----------------
   buildSpikes() {
-    const positions = [120, 240, 360, 480, 600, 720];
-
-    positions.forEach(x => {
-      const spike = this.spikes.create(x, 485, "spikes");
+    for (let i = 100; i <= 700; i += 120) {
+      const spike = this.spikes.create(i, 490, "spikes");
       spike.setScale(0.12);
       spike.refreshBody();
-    });
+    }
   }
 
-  // ---------------- PLAYER ----------------
-  createPlayer() {
-    this.player = this.physics.add.sprite(100, 460, "player");
-    this.player.setScale(0.12);
-    this.player.setCollideWorldBounds(true);
-    this.player.setBounce(0.02);
-  }
-
-  // ---------------- ENEMIES ----------------
-  createEnemies() {
-    // ground alien
-    this.runner = this.physics.add.sprite(500, 250, "alien1");
-    this.runner.setScale(0.13);
-    this.runner.setVelocityX(80);
-
-    // flying alien
-    this.flyer = this.physics.add.sprite(300, 160, "alien2");
-    this.flyer.setScale(0.14);
-    this.flyer.body.allowGravity = false;
-    this.flyer.startY = this.flyer.y;
-    this.flyer.setVelocityX(60);
-  }
-
-  // ---------------- COLLECTIBLES ----------------
   createCollectibles() {
     const items = [
-      { x: 170, y: 390, key: "star1", value: 10, scale: 0.08 },
-      { x: 330, y: 320, key: "star1", value: 10, scale: 0.08 },
-      { x: 500, y: 255, key: "star1", value: 15, scale: 0.08 },
-      { x: 670, y: 190, key: "star1", value: 15, scale: 0.08 },
-
-      { x: 700, y: 350, key: "star2", value: 25, scale: 0.04 },
-      { x: 220, y: 190, key: "star2", value: 25, scale: 0.04 }
+      { x: 170, y: 390, key: "star1", value: 10 },
+      { x: 330, y: 320, key: "star1", value: 10 },
+      { x: 500, y: 250, key: "star1", value: 15 },
+      { x: 670, y: 190, key: "star1", value: 15 },
+      { x: 220, y: 200, key: "star2", value: 25 },
+      { x: 600, y: 200, key: "star2", value: 30 }
     ];
 
     items.forEach(i => {
-      const s = this.collectibles.create(i.x, i.y, i.key);
-      s.setScale(i.scale);
-      s.value = i.value;
-      s.body.setGravityY(40);
+      const star = this.collectibles.create(i.x, i.y, i.key);
+      star.setScale(i.key === "star1" ? 0.08 : 0.045);
+      star.body.setGravityY(30);
+      star.value = i.value;
     });
   }
 
-  // ---------------- HAZARDS ----------------
   spawnHazards() {
-    for (let i = 0; i < 5; i++) {
-      this.spawnHazard();
-    }
-
     this.time.addEvent({
       delay: 1200,
       loop: true,
-      callback: () => this.spawnHazard()
+      callback: () => {
+        const h = this.hazards.create(
+          Phaser.Math.Between(50, 750),
+          -50,
+          "star2"
+        );
+        h.setScale(0.04);
+        h.setVelocityY(200);
+      }
     });
   }
 
-  spawnHazard() {
-    const h = this.hazards.create(
-      Phaser.Math.Between(50, 750),
-      -40,
-      "star2"
-    );
-
-    h.setScale(0.035);
-    h.setVelocityY(100);
-    h.body.setGravityY(200);
-  }
-
-  // ---------------- UI ----------------
-  createUI() {
-    this.scoreText = this.add.text(20, 20, "Score: 0");
-    this.livesText = this.add.text(20, 50, "Lives: 3");
-    this.timerText = this.add.text(20, 80, "Time: 0");
-  }
-
-  // ---------------- GAME LOGIC ----------------
-  collect(player, item) {
-    this.score += item.value;
+  collectStar(player, star) {
+    this.score += star.value;
     this.scoreText.setText("Score: " + this.score);
-    item.destroy();
+    star.destroy();
   }
 
-  hit() {
-    if (this.invincible) return;
+  hitPlayer() {
+    if (this.isInvincible || this.gameOver) return;
 
     this.lives--;
     this.livesText.setText("Lives: " + this.lives);
 
-    this.invincible = true;
+    this.isInvincible = true;
     this.player.setTint(0xff0000);
 
     this.time.delayedCall(1000, () => {
       this.player.clearTint();
-      this.invincible = false;
+      this.isInvincible = false;
     });
 
     if (this.lives <= 0) {
-      this.scene.restart();
+      this.gameOver = true;
+      this.physics.pause();
+
+      this.add.text(400, 300, "GAME OVER\nClick to Restart", {
+        fontSize: "32px",
+        align: "center"
+      }).setOrigin(0.5);
+
+      this.input.once("pointerdown", () => {
+        this.scene.restart({ score: 0, lives: 3, level: 1 });
+      });
     }
   }
 
-  // ---------------- UPDATE ----------------
-  update(time, delta) {
-    this.timeAlive += delta / 1000;
-    this.timerText.setText("Time: " + this.timeAlive.toFixed(1));
+  update(time) {
+    if (this.gameOver) return;
 
-    const speed = 250;
+    const speed = 300;
 
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-speed);
@@ -264,22 +232,35 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityX(0);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && this.player.body.blocked.down) {
-      this.player.setVelocityY(-420);
+    if (
+      Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
+      this.player.body.blocked.down
+    ) {
+      this.player.setVelocityY(-470);
     }
 
-    // alien 1 respawn
-    if (this.runner.y > 600) {
-      this.runner.y = -40;
-      this.runner.x = Phaser.Math.Between(100, 700);
+    // Runner respawn
+    if (this.runner.y > 650) {
+      this.runner.setPosition(Phaser.Math.Between(100, 700), -50);
     }
 
-    // alien 2 bobbing
+    // Flyer movement
     this.flyer.y = this.flyer.startY + Math.sin(time / 300) * 20;
+
+    if (this.flyer.x <= 100 || this.flyer.x >= 700) {
+      this.flyer.setVelocityX(-this.flyer.body.velocity.x);
+    }
+
+    // Reset falling hazards
+    this.hazards.children.each(h => {
+      if (h.y > 650) {
+        h.y = -50;
+        h.x = Phaser.Math.Between(50, 750);
+      }
+    });
   }
 }
 
-// ---------------- CONFIG ----------------
 const config = {
   type: Phaser.AUTO,
   width: 800,
@@ -287,7 +268,9 @@ const config = {
   parent: "game",
   physics: {
     default: "arcade",
-    arcade: { gravity: { y: 500 }, debug: false }
+    arcade: {
+      gravity: { y: 500 }
+    }
   },
   scene: [StartScene, MainScene]
 };
