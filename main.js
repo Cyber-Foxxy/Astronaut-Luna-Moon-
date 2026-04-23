@@ -1,10 +1,4 @@
-// Features implemented (for submission):
-// 1) Spacebar jump
-// 2) Global star gravity change (world gravity tweak)
-// 3) Individual star gravity (random per star)
-// 4) Different player sprite key (playerAlt loaded)
-// 5) Spikes hazard
-// Additional: Start screen, Level system, Timer, Different collectible values
+
 
 class MenuScene extends Phaser.Scene {
   constructor() {
