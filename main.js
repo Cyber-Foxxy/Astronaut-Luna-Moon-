@@ -1,3 +1,5 @@
+
+
 class StartScene extends Phaser.Scene {
   constructor() {
     super("StartScene");
@@ -22,14 +24,22 @@ class StartScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x120b2f, 0.35);
 
-    this.add.text(width / 2, 100, "Astronaut Luna Moon", {
+    const border = this.add.graphics();
+    border.lineStyle(4, 0xffffff, 0.25);
+    border.strokeRect(4, 4, width - 8, height - 8);
+    border.lineStyle(8, 0x8b5cf6, 0.82);
+    border.strokeRect(12, 12, width - 24, height - 24);
+
+    this.add.text(width / 2, 95, "Astronaut Luna Moon", {
       fontSize: "42px",
       color: "#ffffff",
       stroke: "#000000",
       strokeThickness: 6
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 200,
+    this.add.text(
+      width / 2,
+      185,
       "Collect both kinds of stars\nAvoid Alien 1, Alien 2, spikes, and falling hazards",
       {
         fontSize: "24px",
@@ -40,8 +50,10 @@ class StartScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    this.add.text(width / 2, 295,
-      "Controls:\nLEFT / RIGHT = Move\nSPACEBAR = Jump",
+    this.add.text(
+      width / 2,
+      290,
+      "Controls:\nLEFT / RIGHT ARROWS = Move\nSPACEBAR = Jump",
       {
         fontSize: "24px",
         color: "#ffffff",
@@ -62,8 +74,10 @@ class StartScene extends Phaser.Scene {
       strokeThickness: 5
     }).setOrigin(0.5);
 
+    startButton.on("pointerover", () => startButton.setFillStyle(0xa855f7));
+    startButton.on("pointerout", () => startButton.setFillStyle(0x8b5cf6));
     startButton.on("pointerdown", () => {
-      this.scene.start("MainScene", { score: 0, level: 1 });
+      this.scene.start("MainScene", { score: 0, level: 1, lives: 3 });
     });
   }
 }
@@ -73,15 +87,19 @@ class MainScene extends Phaser.Scene {
     super("MainScene");
     this.score = 0;
     this.level = 1;
-    this.gameOverFlag = false;
+    this.lives = 3;
     this.elapsedTime = 0;
+    this.gameOverFlag = false;
+    this.isInvincible = false;
   }
 
   init(data) {
     this.score = data.score || 0;
     this.level = data.level || 1;
-    this.gameOverFlag = false;
+    this.lives = data.lives ?? 3;
     this.elapsedTime = 0;
+    this.gameOverFlag = false;
+    this.isInvincible = false;
   }
 
   preload() {
@@ -110,6 +128,15 @@ class MainScene extends Phaser.Scene {
     const bg = this.add.image(width / 2, height / 2, "bg");
     bg.setDisplaySize(width, height);
 
+    this.add.rectangle(width / 2, height / 2, width, height, 0x120b2f, 0.12);
+
+    const border = this.add.graphics();
+    border.lineStyle(4, 0xffffff, 0.2);
+    border.strokeRect(4, 4, width - 8, height - 8);
+    border.lineStyle(8, 0x8b5cf6, 0.82);
+    border.strokeRect(12, 12, width - 24, height - 24);
+    border.setDepth(100);
+
     this.platforms = this.physics.add.staticGroup();
     this.spikeGroup = this.physics.add.staticGroup();
     this.collectibles = this.physics.add.group();
@@ -117,25 +144,8 @@ class MainScene extends Phaser.Scene {
 
     this.buildPlatforms();
     this.buildSpikes();
-
-    this.player = this.physics.add.sprite(100, 470, "player");
-    this.player.setScale(0.24);
-    this.player.setCollideWorldBounds(true);
-    this.player.setBounce(0.02);
-
-    this.runner = this.physics.add.sprite(560, 280, "alien1");
-    this.runner.setScale(0.18);
-    this.runner.setCollideWorldBounds(true);
-    this.runner.setBounce(1, 0);
-    this.runner.setVelocityX(90);
-
-    this.flyer = this.physics.add.sprite(300, 170, "alien2");
-    this.flyer.setScale(0.18);
-    this.flyer.setAllowGravity(false);
-    this.flyer.body.allowGravity = false;
-    this.flyer.startY = this.flyer.y;
-    this.flyer.setVelocityX(80);
-
+    this.createPlayer();
+    this.createEnemies();
     this.createCollectibles();
     this.startHazards();
     this.createUI();
@@ -146,9 +156,7 @@ class MainScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.runner, this.platforms);
     this.physics.add.collider(this.collectibles, this.platforms);
-    this.physics.add.collider(this.hazards, this.platforms, (hazard) => {
-      if (hazard.y > 500) hazard.destroy();
-    });
+    this.physics.add.collider(this.hazards, this.platforms, this.handleHazardPlatformHit, null, this);
 
     this.physics.add.overlap(this.player, this.collectibles, this.collectItem, null, this);
     this.physics.add.overlap(this.player, this.runner, this.hitDanger, null, this);
@@ -159,13 +167,13 @@ class MainScene extends Phaser.Scene {
 
   buildPlatforms() {
     const data = [
-      { x: 400, y: 530, sx: 1.2, sy: 0.6 },
-      { x: 170, y: 445, sx: 0.55, sy: 0.45 },
-      { x: 350, y: 375, sx: 0.55, sy: 0.45 },
-      { x: 560, y: 305, sx: 0.55, sy: 0.45 },
-      { x: 710, y: 395, sx: 0.50, sy: 0.42 },
-      { x: 220, y: 245, sx: 0.50, sy: 0.42 },
-      { x: 640, y: 200, sx: 0.50, sy: 0.42 }
+      { x: 400, y: 510, sx: 1.05, sy: 0.58 }, // ground
+      { x: 170, y: 435, sx: 0.48, sy: 0.42 },
+      { x: 330, y: 365, sx: 0.48, sy: 0.42 },
+      { x: 500, y: 300, sx: 0.48, sy: 0.42 },
+      { x: 670, y: 240, sx: 0.48, sy: 0.42 },
+      { x: 700, y: 395, sx: 0.40, sy: 0.36 },
+      { x: 220, y: 235, sx: 0.40, sy: 0.36 }
     ];
 
     data.forEach((p) => {
@@ -177,33 +185,83 @@ class MainScene extends Phaser.Scene {
 
   buildSpikes() {
     const data = [
-      { x: 500, y: 505 },
-      { x: 610, y: 505 },
-      { x: 90, y: 505 }
+      { x: 500, y: 486 },
+      { x: 600, y: 486 },
+      { x: 92, y: 486 }
     ];
 
     data.forEach((s) => {
       const spike = this.spikeGroup.create(s.x, s.y, "spikes");
-      spike.setScale(0.22);
+      spike.setScale(0.18);
       spike.refreshBody();
     });
   }
 
+  createPlayer() {
+    this.player = this.physics.add.sprite(100, 455, "player");
+    this.player.setScale(0.13);
+    this.player.setCollideWorldBounds(true);
+    this.player.setBounce(0.02);
+
+    this.player.body.setSize(
+      this.player.width * 0.34,
+      this.player.height * 0.52
+    );
+    this.player.body.setOffset(
+      this.player.width * 0.33,
+      this.player.height * 0.30
+    );
+  }
+
+  createEnemies() {
+    this.runner = this.physics.add.sprite(500, 250, "alien1");
+    this.runner.setScale(0.14);
+    this.runner.setCollideWorldBounds(false);
+    this.runner.setBounce(1, 0);
+    this.runner.setVelocityX(85 + this.level * 8);
+
+    this.runner.body.setSize(
+      this.runner.width * 0.62,
+      this.runner.height * 0.42
+    );
+    this.runner.body.setOffset(
+      this.runner.width * 0.18,
+      this.runner.height * 0.36
+    );
+
+    this.flyer = this.physics.add.sprite(300, 155, "alien2");
+    this.flyer.setScale(0.16);
+    this.flyer.setAllowGravity(false);
+    this.flyer.body.allowGravity = false;
+    this.flyer.setImmovable(true);
+    this.flyer.startY = this.flyer.y;
+    this.flyer.setVelocityX(70 + this.level * 6);
+
+    this.flyer.body.setSize(
+      this.flyer.width * 0.42,
+      this.flyer.height * 0.62
+    );
+    this.flyer.body.setOffset(
+      this.flyer.width * 0.30,
+      this.flyer.height * 0.18
+    );
+  }
+
   createCollectibles() {
     const items = [
-      { x: 160, y: 405, key: "star1", value: 10 },
-      { x: 350, y: 335, key: "star1", value: 10 },
-      { x: 560, y: 265, key: "star1", value: 10 },
-      { x: 700, y: 365, key: "star1", value: 15 },
-      { x: 220, y: 205, key: "star2", value: 25 },
-      { x: 640, y: 160, key: "star2", value: 30 }
+      { x: 170, y: 395, key: "star1", value: 10 },
+      { x: 330, y: 325, key: "star1", value: 10 },
+      { x: 500, y: 260, key: "star1", value: 15 },
+      { x: 670, y: 200, key: "star1", value: 15 },
+      { x: 700, y: 355, key: "star2", value: 25 },
+      { x: 220, y: 195, key: "star2", value: 30 }
     ];
 
     items.forEach((item) => {
       const star = this.collectibles.create(item.x, item.y, item.key);
       star.setScale(item.key === "star1" ? 0.10 : 0.09);
-      star.setBounce(0.25);
-      star.body.setGravityY(Phaser.Math.Between(35, 95));
+      star.setBounce(0.15);
+      star.body.setGravityY(Phaser.Math.Between(25, 75));
       star.value = item.value;
     });
   }
@@ -251,7 +309,14 @@ class MainScene extends Phaser.Scene {
       strokeThickness: 5
     });
 
-    this.timerText = this.add.text(18, 76, "Time: 0.0", {
+    this.livesText = this.add.text(18, 76, `Lives: ${this.lives}`, {
+      fontSize: "22px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 5
+    });
+
+    this.timerText = this.add.text(18, 106, "Time: 0.0", {
       fontSize: "22px",
       color: "#ffffff",
       stroke: "#000000",
@@ -262,7 +327,8 @@ class MainScene extends Phaser.Scene {
       fontSize: "28px",
       color: "#ffffff",
       stroke: "#000000",
-      strokeThickness: 6
+      strokeThickness: 6,
+      align: "center"
     }).setOrigin(0.5);
 
     this.time.delayedCall(1600, () => {
@@ -276,20 +342,85 @@ class MainScene extends Phaser.Scene {
     item.destroy();
 
     if (this.collectibles.countActive(true) === 0) {
-      this.physics.pause();
-      this.messageText.setText("Level Complete!");
+      this.levelComplete();
     }
   }
 
+  handleHazardPlatformHit(hazard) {
+    if (!hazard.active) return;
+    if (hazard.y > 500) {
+      this.resetFallingObject(hazard);
+    }
+  }
+
+  resetFallingObject(hazard) {
+    hazard.enableBody(
+      true,
+      Phaser.Math.Between(50, 750),
+      Phaser.Math.Between(-260, -60),
+      true,
+      true
+    );
+    hazard.setVelocityX(Phaser.Math.Between(-25, 25));
+    hazard.setVelocityY(0);
+    hazard.setAngularVelocity(Phaser.Math.Between(-80, 80));
+    hazard.body.setGravityY(Phaser.Math.Between(180, 250));
+  }
+
+  damagePlayer() {
+    this.lives -= 1;
+    this.livesText.setText(`Lives: ${this.lives}`);
+
+    this.isInvincible = true;
+    this.player.setTint(0xff6666);
+
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.25,
+      duration: 120,
+      yoyo: true,
+      repeat: 7,
+      onComplete: () => {
+        this.player.clearTint();
+        this.player.setAlpha(1);
+      }
+    });
+
+    this.player.setVelocity(0, -220);
+    this.player.x = 100;
+    this.player.y = 455;
+
+    this.time.delayedCall(1200, () => {
+      this.isInvincible = false;
+    });
+  }
+
   hitDanger() {
-    if (this.gameOverFlag) return;
+    if (this.gameOverFlag || this.isInvincible) return;
 
-    this.gameOverFlag = true;
+    this.damagePlayer();
+
+    if (this.lives <= 0) {
+      this.gameOverFlag = true;
+      this.physics.pause();
+      this.messageText.setText("Game Over\nClick to Restart");
+
+      this.input.once("pointerdown", () => {
+        this.scene.restart({ score: 0, level: 1, lives: 3 });
+      });
+    }
+  }
+
+  levelComplete() {
     this.physics.pause();
-    this.messageText.setText("Game Over\nClick to Restart");
+    this.messageText.setText("Level Complete!");
 
-    this.input.once("pointerdown", () => {
-      this.scene.restart({ score: 0, level: 1 });
+    this.time.delayedCall(1200, () => {
+      this.scene.restart({
+        score: this.score,
+        level: this.level + 1,
+        lives: this.lives
+      });
     });
   }
 
@@ -299,16 +430,20 @@ class MainScene extends Phaser.Scene {
     this.elapsedTime += delta / 1000;
     this.timerText.setText(`Time: ${this.elapsedTime.toFixed(1)}`);
 
+    const moveSpeed = 220;
+
+    // arrow keys move
     if (this.cursors.left.isDown) {
-      this.player.setVelocityX(-220);
+      this.player.setVelocityX(-moveSpeed);
       this.player.flipX = true;
     } else if (this.cursors.right.isDown) {
-      this.player.setVelocityX(220);
+      this.player.setVelocityX(moveSpeed);
       this.player.flipX = false;
     } else {
       this.player.setVelocityX(0);
     }
 
+    // spacebar jumps only
     if (
       Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
       this.player.body.blocked.down
@@ -316,25 +451,37 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityY(-390);
     }
 
-    if (this.runner.body.blocked.left) {
-      this.runner.setVelocityX(90);
-    } else if (this.runner.body.blocked.right) {
-      this.runner.setVelocityX(-90);
+    // alien 1 patrols / respawns if it falls
+    if (this.runner.y > 650) {
+      this.runner.setPosition(Phaser.Math.Between(120, 680), -40);
+      this.runner.setVelocityX(
+        Phaser.Math.Between(0, 1) === 0
+          ? -(85 + this.level * 8)
+          : (85 + this.level * 8)
+      );
+      this.runner.setVelocityY(0);
+    } else {
+      if (this.runner.body.blocked.left) {
+        this.runner.setVelocityX(85 + this.level * 8);
+      } else if (this.runner.body.blocked.right) {
+        this.runner.setVelocityX(-(85 + this.level * 8));
+      }
     }
 
-    if (this.flyer.x <= 90) {
-      this.flyer.setVelocityX(80);
+    // alien 2 floats and bobs
+    if (this.flyer.x <= 100) {
+      this.flyer.setVelocityX(70);
       this.flyer.flipX = false;
-    } else if (this.flyer.x >= 710) {
-      this.flyer.setVelocityX(-80);
+    } else if (this.flyer.x >= 700) {
+      this.flyer.setVelocityX(-70);
       this.flyer.flipX = true;
     }
-
     this.flyer.y = this.flyer.startY + Math.sin(time / 350) * 20;
 
+    // hazards respawn
     this.hazards.children.each((hazard) => {
       if (hazard && hazard.active && hazard.y > 640) {
-        hazard.destroy();
+        this.resetFallingObject(hazard);
       }
     });
   }
