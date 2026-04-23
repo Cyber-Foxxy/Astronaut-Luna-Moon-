@@ -1,5 +1,4 @@
 
-
 class StartScene extends Phaser.Scene {
   constructor() {
     super("StartScene");
@@ -151,14 +150,28 @@ class MainScene extends Phaser.Scene {
     this.createUI();
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE
+    );
 
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.runner, this.platforms);
     this.physics.add.collider(this.collectibles, this.platforms);
-    this.physics.add.collider(this.hazards, this.platforms, this.handleHazardPlatformHit, null, this);
+    this.physics.add.collider(
+      this.hazards,
+      this.platforms,
+      this.handleHazardPlatformHit,
+      null,
+      this
+    );
 
-    this.physics.add.overlap(this.player, this.collectibles, this.collectItem, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.collectibles,
+      this.collectItem,
+      null,
+      this
+    );
     this.physics.add.overlap(this.player, this.runner, this.hitDanger, null, this);
     this.physics.add.overlap(this.player, this.flyer, this.hitDanger, null, this);
     this.physics.add.overlap(this.player, this.spikeGroup, this.hitDanger, null, this);
@@ -167,7 +180,7 @@ class MainScene extends Phaser.Scene {
 
   buildPlatforms() {
     const data = [
-      { x: 400, y: 510, sx: 1.05, sy: 0.58 }, // ground
+      { x: 400, y: 510, sx: 1.05, sy: 0.58 },
       { x: 170, y: 435, sx: 0.48, sy: 0.42 },
       { x: 330, y: 365, sx: 0.48, sy: 0.42 },
       { x: 500, y: 300, sx: 0.48, sy: 0.42 },
@@ -231,7 +244,6 @@ class MainScene extends Phaser.Scene {
 
     this.flyer = this.physics.add.sprite(300, 155, "alien2");
     this.flyer.setScale(0.16);
-    this.flyer.setAllowGravity(false);
     this.flyer.body.allowGravity = false;
     this.flyer.setImmovable(true);
     this.flyer.startY = this.flyer.y;
@@ -432,7 +444,6 @@ class MainScene extends Phaser.Scene {
 
     const moveSpeed = 220;
 
-    // arrow keys move
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-moveSpeed);
       this.player.flipX = true;
@@ -443,7 +454,6 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityX(0);
     }
 
-    // spacebar jumps only
     if (
       Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
       this.player.body.blocked.down
@@ -451,7 +461,6 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityY(-390);
     }
 
-    // alien 1 patrols / respawns if it falls
     if (this.runner.y > 650) {
       this.runner.setPosition(Phaser.Math.Between(120, 680), -40);
       this.runner.setVelocityX(
@@ -468,7 +477,6 @@ class MainScene extends Phaser.Scene {
       }
     }
 
-    // alien 2 floats and bobs
     if (this.flyer.x <= 100) {
       this.flyer.setVelocityX(70);
       this.flyer.flipX = false;
@@ -476,9 +484,9 @@ class MainScene extends Phaser.Scene {
       this.flyer.setVelocityX(-70);
       this.flyer.flipX = true;
     }
+
     this.flyer.y = this.flyer.startY + Math.sin(time / 350) * 20;
 
-    // hazards respawn
     this.hazards.children.each((hazard) => {
       if (hazard && hazard.active && hazard.y > 640) {
         this.resetFallingObject(hazard);
