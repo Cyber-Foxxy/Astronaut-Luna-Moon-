@@ -1,15 +1,3 @@
-/* 
-Features implemented:
-1. Spacebar jump
-2. Individual star gravity
-3. New player sprite
-4. Spikes hazard
-5. More platforms / level layout
-6. Enemies to avoid
-7. Timer
-8. Different collectible values
-*/
-
 const config = {
   type: Phaser.AUTO,
   width: 900,
@@ -19,7 +7,7 @@ const config = {
     default: "arcade",
     arcade: {
       gravity: { y: 650 },
-      debug: true
+      debug: false
     }
   },
   scene: {
@@ -48,6 +36,9 @@ let startTime;
 let timerRunning = true;
 let level = 1;
 
+const SAFE_START_X = 90;
+const SAFE_START_Y = 500;
+
 function preload() {
   this.load.image("background", "assets/background.png");
   this.load.image("player", "assets/astronaut.png");
@@ -64,10 +55,12 @@ function create() {
   timerRunning = true;
   startTime = this.time.now;
 
-  this.add.image(450, 300, "background")
-    .setDisplaySize(900, 600);
+  this.add.image(450, 300, "background").setDisplaySize(900, 600);
 
   platforms = this.physics.add.staticGroup();
+  spikes = this.physics.add.staticGroup();
+  stars = this.physics.add.group();
+  enemies = this.physics.add.group();
 
   createPlatforms(this);
   createSpikes(this);
@@ -123,7 +116,7 @@ function update() {
     player.flipX = false;
   }
 
-  if (Phaser.Input.Keyboard.JustDown(spaceKey) && player.body.touching.down) {
+  if (Phaser.Input.Keyboard.JustDown(spaceKey) && player.body.blocked.down) {
     player.setVelocityY(-500);
   }
 
@@ -131,24 +124,22 @@ function update() {
     if (!enemy) return;
 
     if (enemy.x <= 60) {
-      enemy.setVelocityX(90 + level * 15);
+      enemy.setVelocityX(100 + level * 15);
       enemy.flipX = false;
     }
 
     if (enemy.x >= 840) {
-      enemy.setVelocityX(-90 - level * 15);
+      enemy.setVelocityX(-100 - level * 15);
       enemy.flipX = true;
     }
   });
 
   if (player.y > 650) {
-    restartLevel(this);
+    playerDeath(this);
   }
 }
 
 function createPlatforms(scene) {
-  platforms.clear(true, true);
-
   const platformData = [
     { x: 450, y: 575, w: 950 },
     { x: 160, y: 465, w: 230 },
@@ -166,18 +157,35 @@ function createPlatforms(scene) {
 }
 
 function createPlayer(scene) {
-  player = scene.physics.add.sprite(80, 500, "player");
+  player = scene.physics.add.sprite(SAFE_START_X, SAFE_START_Y, "player");
 
-  player.setDisplaySize(55, 70);
+  player.setDisplaySize(50, 65);
   player.setCollideWorldBounds(true);
   player.setBounce(0.05);
-  player.body.setSize(40, 58);
-  player.body.setOffset(8, 8);
+
+  player.body.setSize(36, 52);
+  player.body.setOffset(10, 10);
+}
+
+function createSpikes(scene) {
+  /*
+    Spikes are placed slightly ABOVE the bottom platform,
+    but not near the safe spawn point.
+    This prevents instant reset when the level starts.
+  */
+
+  for (let x = 220; x <= 830; x += 95) {
+    const spike = spikes.create(x, 535, "spikes");
+
+    spike.setDisplaySize(50, 36);
+    spike.refreshBody();
+
+    spike.body.setSize(38, 22);
+    spike.body.setOffset(6, 14);
+  }
 }
 
 function createStars(scene) {
-  stars = scene.physics.add.group();
-
   const starPositions = [
     { x: 160, y: 60, type: "star1", value: 10 },
     { x: 450, y: 60, type: "star2", value: 25 },
@@ -189,49 +197,34 @@ function createStars(scene) {
   starPositions.forEach((data, index) => {
     const star = stars.create(data.x, data.y, data.type);
 
-    if (data.type === "star2") {
-      star.setDisplaySize(34, 34);
-    } else {
-      star.setDisplaySize(32, 32);
-    }
-
+    star.setDisplaySize(30, 30);
     star.value = data.value;
+
     star.setBounceY(0.15);
     star.setCollideWorldBounds(true);
+    star.body.setGravityY(80 + index * 80);
 
-    star.body.setGravityY(100 + index * 90);
+    star.body.setSize(24, 24);
+    star.body.setOffset(3, 3);
   });
 }
 
-function createSpikes(scene) {
-  spikes = scene.physics.add.staticGroup();
-
-  for (let x = 80; x <= 820; x += 95) {
-    const spike = spikes.create(x, 545, "spikes");
-    spike.setDisplaySize(58, 42);
-    spike.refreshBody();
-
-    spike.body.setSize(45, 30);
-    spike.body.setOffset(7, 10);
-  }
-}
-
 function createEnemies(scene) {
-  enemies = scene.physics.add.group();
-
   const alienOne = enemies.create(720, 250, "alien1");
-  alienOne.setDisplaySize(75, 55);
+  alienOne.setDisplaySize(70, 52);
   alienOne.setVelocityX(-100);
   alienOne.setBounce(1);
   alienOne.setCollideWorldBounds(true);
-  alienOne.body.setSize(60, 40);
+  alienOne.body.setSize(55, 38);
+  alienOne.body.setOffset(8, 8);
 
   const alienTwo = enemies.create(430, 330, "alien2");
-  alienTwo.setDisplaySize(60, 85);
+  alienTwo.setDisplaySize(55, 78);
   alienTwo.setVelocityX(120);
   alienTwo.setBounce(1);
   alienTwo.setCollideWorldBounds(true);
-  alienTwo.body.setSize(42, 65);
+  alienTwo.body.setSize(38, 58);
+  alienTwo.body.setOffset(8, 10);
 }
 
 function collectStar(player, star) {
@@ -251,10 +244,18 @@ function collectStar(player, star) {
 }
 
 function hitHazard(player, hazard) {
-  restartLevel(this);
+  playerDeath(this);
 }
 
-function restartLevel(scene) {
+function playerDeath(scene) {
   score = 0;
-  scene.scene.restart();
+
+  player.setVelocity(0, 0);
+  player.setPosition(SAFE_START_X, SAFE_START_Y);
+
+  if (player.body) {
+    player.body.enable = true;
+  }
+
+  scoreText.setText("Score: 0");
 }
