@@ -37,12 +37,12 @@ class MainScene extends Phaser.Scene {
   preload() {
     // All assets are PNGs now
     this.load.image("bg", "assets/background.png");
-    this.load.image("platform", "assets/floating_island.png");
-    this.load.image("star", "assets/star_happy.png");
+    this.load.image("platform", "assets/platform.png");
+    this.load.image("star", "assets/star1.png");
     this.load.image("spike", "assets/spike.png");
     this.load.spritesheet("player", "assets/astronaut.png", { frameWidth: 128, frameHeight: 128 });
-    this.load.spritesheet("playerAlt", "assets/astronaut.png", { frameWidth: 128, frameHeight: 128 });
-    this.load.spritesheet("alien", "assets/jetray.png", { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet("playerAlt", "assets/alien2.png", { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet("alien", "assets/alien1.png", { frameWidth: 128, frameHeight: 128 });
   }
 
   create(data) {
